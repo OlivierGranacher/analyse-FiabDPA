@@ -1,0 +1,32 @@
+---
+title: "Tokai Cathode Performance at SJM"
+author: "PLM-OG"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+
+output:
+  html_document:
+    theme: united
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, include = F, eval = T, message = F, warning = F, cache = T)
+ggplot2::theme_set(ggplot2::theme_light())
+library(tidyverse)
+library(glue)
+library(lubridate)
+```
+
+# objectif
+
+> Analyses de la performance des DPA sur la base des données de
+> réparation Mille. En particulier analyser les maintenances des vérins
+> piqueur.
+
+```{r dataload}
+d <- readxl::read_xlsx("data/reparations_DPA.xlsx")
+```
