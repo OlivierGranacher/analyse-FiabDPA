@@ -1,0 +1,81 @@
+---
+title: "Synthèse des cahiers des entrées/sorties  Mille"
+author: "OG"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+date: last-modified
+lang: fr
+code-fold: true
+number-sections: true
+editor: visual
+fig-width: 8
+fig-asp: .62
+fig-align: left
+execute:
+  eval: true
+  cache: false
+  warning: false
+  echo: false
+  include: false
+theme: flatly
+---
+
+```{r}
+#| label: setup
+#| cache: true
+library(dplyr)
+library(glue)
+library(lubridate)
+```
+
+## Objectif
+
+> Faire une synthèse des 2 cahiers de saisie des opérateurs Mille pour
+> la maintenance des DPA. Le premier cahier indique les constats faits à
+> l'arrivée des DPA. Le deuxième cahier donne des réparations
+> principales faites sur les dpa.
+
+```{r}
+#| label: import_data
+# Import des données des diagnostics et réparations
+d_raw <- readxl::read_xlsx(
+  path = "data/cahier_operateurs_mille.xlsx",
+  sheet = "data",
+  range = "A1:O101"
+) |> janitor::clean_names()
+# Import des catégories de diagnostic
+cat_diag <- readxl::read_xlsx(
+  path = "data/cahier_operateurs_mille.xlsx",
+  sheet = "liste_saisies",
+  range = "A1:B16"
+) |> janitor::clean_names() |> 
+  mutate(type_intervention = "diag")
+# Import des catégories de réparations
+cat_rep <- readxl::read_xlsx(
+  path = "data/cahier_operateurs_mille.xlsx",
+  sheet = "liste_saisies",
+  range = "C1:D11"
+) |> janitor::clean_names() |> 
+  mutate(type_intervention = "repa")
+# Concaténation des catégories
+cat <- bind_rows(cat_rep, cat_diag) 
+rm(cat_diag, cat_rep)
+```
+
+```{r}
+#| label: tidy_data
+
+ddd <- d_raw |> 
+  select(date_arrivee, num_dpa, starts_with(c("diag", "rep"))) |> 
+  tidyr::pivot_longer(
+    cols = starts_with(c("diag", "rep")),
+    names_to = "type_intervention",
+    values_to = "intervention"
+  ) |> 
+  mutate(type_intervention = stringr::str_sub(type_intervention, 1, 4))
+# Ajout des catégories de diagnostic et réparations
+ddd <- ddd |> 
+  left_join(cat)
+```
