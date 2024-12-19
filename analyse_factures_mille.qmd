@@ -1,0 +1,84 @@
+---
+title: "Analyse des factures mensuelles DPA de Mille"
+author: "OG"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+date: last-modified
+lang: fr
+code-fold: true
+number-sections: true
+editor: visual
+fig-width: 8
+fig-asp: .62
+fig-align: left
+execute:
+  eval: true
+  cache: false
+  warning: false
+  echo: false
+  include: false
+theme: flatly
+---
+
+```{r}
+#| label: setup
+#| cache: true
+library(dplyr)
+library(glue)
+library(lubridate)
+library(ggplot2)
+theme_set(customColors::theme_potline())
+# palette name pour plots - MetBrewer Package
+pal_name <- "Austria"
+file_path <- "data/factures_dpa_Mille.xlsx"
+```
+
+## Objectif
+
+> Visualiser la décomposition des coûts de réparation des DPA sur la \>
+> base des factures mensuelles de Mille
+
+```{r}
+#| label: import_data
+# Import des données des diagnostics et réparations
+d_raw <- readxl::read_xlsx(
+  path = file_path,
+  sheet = "data_detail",
+  range = "A1:E1000"
+) |> janitor::clean_names() |> 
+  na.omit()
+### période des données
+dat_min <- min(d_raw$mois) |> format("%d-%m-%Y")
+dat_max <- max(d_raw$mois) |> format("%d-%m-%Y")
+# Import des catégories d'interventions
+cat <- readxl::read_xlsx(
+  path = file_path,
+  sheet = "listes",
+  range = "C1:D20"
+) |> janitor::clean_names() |> 
+  na.omit()
+# Import des totaux couts par mois
+cout_mois <- readxl::read_xlsx(
+  path = file_path,
+  sheet = "data_mois",
+  range = "A1:B11"
+) |> janitor::clean_names() |> 
+  na.omit()
+# Concaténation des données
+ddd <- d_raw |> 
+  left_join(
+    cat,
+    join_by(poste)
+  ) |> 
+  left_join(
+    cout_mois,
+    join_by(mois)
+            )
+
+```
+
+```{r}
+#| label: tidy_data
+```

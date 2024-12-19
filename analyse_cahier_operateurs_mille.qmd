@@ -1,5 +1,5 @@
 ---
-title: "Synthèse des cahiers des entrées/sorties  Mille"
+title: "Synthèse des cahiers des entrées/sorties DPA chez Mille"
 author: "OG"
 format: 
   html:
@@ -28,14 +28,18 @@ theme: flatly
 library(dplyr)
 library(glue)
 library(lubridate)
+library(ggplot2)
+theme_set(customColors::theme_potline())
+# palette name pour plots - MetBrewer Package
+pal_name <- "Austria"
 ```
 
 ## Objectif
 
 > Faire une synthèse des 2 cahiers de saisie des opérateurs Mille pour
 > la maintenance des DPA. Le premier cahier indique les constats faits à
-> l'arrivée des DPA. Le deuxième cahier donne des réparations
-> principales faites sur les dpa.
+> l'arrivée des DPA. Le deuxième cahier donne les réparations
+> principales faites sur les DPA.
 
 ```{r}
 #| label: import_data
@@ -45,23 +49,29 @@ d_raw <- readxl::read_xlsx(
   sheet = "data",
   range = "A1:O101"
 ) |> janitor::clean_names()
+### Nombre de dpa analysés
+n_dpa <- nrow(d_raw)
+### période des données
+dat_min <- min(d_raw$date_arrivee) |> format("%d-%m-%Y")
+dat_max <- max(d_raw$date_arrivee) |> format("%d-%m-%Y")
 # Import des catégories de diagnostic
 cat_diag <- readxl::read_xlsx(
   path = "data/cahier_operateurs_mille.xlsx",
   sheet = "liste_saisies",
   range = "A1:B16"
 ) |> janitor::clean_names() |> 
-  mutate(type_intervention = "diag")
+  mutate(type_anomalie = "diag")
 # Import des catégories de réparations
 cat_rep <- readxl::read_xlsx(
   path = "data/cahier_operateurs_mille.xlsx",
   sheet = "liste_saisies",
   range = "C1:D11"
 ) |> janitor::clean_names() |> 
-  mutate(type_intervention = "repa")
+  mutate(type_anomalie = "repa")
 # Concaténation des catégories
 cat <- bind_rows(cat_rep, cat_diag) 
 rm(cat_diag, cat_rep)
+
 ```
 
 ```{r}
@@ -71,11 +81,132 @@ ddd <- d_raw |>
   select(date_arrivee, num_dpa, starts_with(c("diag", "rep"))) |> 
   tidyr::pivot_longer(
     cols = starts_with(c("diag", "rep")),
-    names_to = "type_intervention",
+    names_to = "type_anomalie",
     values_to = "intervention"
   ) |> 
-  mutate(type_intervention = stringr::str_sub(type_intervention, 1, 4))
+  mutate(type_anomalie = stringr::str_sub(type_anomalie, 1, 4))
 # Ajout des catégories de diagnostic et réparations
 ddd <- ddd |> 
-  left_join(cat)
+  left_join(cat, join_by(type_anomalie, intervention == liste)) |> 
+  na.omit()
+# Table des cumuls des interventions POUR 100 DPA 
+ddd_sum <- ddd |> 
+  group_by(type_anomalie, categorie, intervention) |> 
+  count(name = "nombre_interventions") |> 
+  mutate(nombre_interventions = nombre_interventions * 100 / n_dpa)
+# Affectation des couleurs par catégorie
+cat_list <-  ddd_sum |> group_by(categorie) |> summarise(tot = sum(nombre_interventions)) |> arrange(desc(tot)) |> pull(categorie)
+pal_cat <- MetBrewer::met.brewer(pal_name, length(cat_list))
+setNames(pal_cat, cat_list)
+
+
+```
+
+## Pareto des Diagnostics à l'arrivée chez Mille
+
+-   RAS signifie qu'aucune anomalie n'a été détectée sur le DPA
+-   Un DPA a souvent plusieurs anomalies
+-   Une fuite échappement concerne en général le vérin piqueur
+-   La catégorie 'vérin_piqueur' inclut le distributeur monté sur le
+    vérin
+
+```{r}
+#| label: plot_diag_1
+#| include: true
+
+ddd_sum |> 
+  filter(type_anomalie == "diag") |> 
+  divUtils::plotPareto(catVar = intervention,
+                       numVar = nombre_interventions,
+                       fillVar = categorie,
+                       flip = T
+                       ) +
+# paletteer::scale_fill_paletteer_d(palette = pal_name, name = "") +
+  scale_fill_manual(values = pal_cat, name = "") +
+  labs(title = "Anomalies pour 100 DPA",
+       x = "",
+       y = "",
+       subtitle = "anomalies détectées à l'arrivée chez Mille",
+       caption = glue("{n_dpa} DPA du {dat_min} au {dat_max}")
+       ) +
+  theme(legend.position = c(0.8, 0.4))
+customColors::add_trimet_logo()
+```
+
+```{r}
+#| label: plot_diag_2
+#| include: true
+
+ddd_sum |> 
+  filter(type_anomalie == "diag") |> 
+  group_by(categorie) |> 
+  summarise(nombre_interventions = sum(nombre_interventions)) |> 
+  divUtils::plotPareto(catVar = categorie,
+                       numVar = nombre_interventions,
+                       fillVar = categorie,
+                       flip = T
+                       ) +
+  
+# paletteer::scale_fill_paletteer_d(palette = pal_name, name = "") +
+  scale_fill_manual(values = pal_cat, name = "") +
+  labs(title = "Anomalies pour 100 DPA",
+       x = "",
+       y = "",
+       subtitle = "anomalies par composant détectées à l'arrivée chez Mille",
+       caption = glue("{n_dpa} DPA du {dat_min} au {dat_max}")
+       ) +
+  theme(legend.position = c(0.8, 0.4))
+customColors::add_trimet_logo()
+```
+
+## Pareto des Réparations à la sortie de Mille
+
+```{r}
+#| label: plot_repa_1
+#| include: true
+
+ddd_sum |> 
+  filter(type_anomalie == "repa") |> 
+  divUtils::plotPareto(catVar = intervention,
+                       numVar = nombre_interventions,
+                       fillVar = categorie,
+                       flip = T
+                       ) +
+# paletteer::scale_fill_paletteer_d(palette = pal_name, name = "") +
+  scale_fill_manual(values = pal_cat, name = "") +
+  labs(title = "Réparations pour 100 DPA",
+       x = "",
+       y = "",
+       subtitle = "réparations des DPA chez Mille",
+       caption = glue("{n_dpa} DPA du {dat_min} au {dat_max}")
+       ) +
+  scale_y_continuous(breaks = seq(0, 60, 10)) +
+  theme(legend.position = c(0.8, 0.4)) 
+customColors::add_trimet_logo()
+```
+
+```{r}
+#| label: plot_repa_2
+#| include: true
+
+ddd_sum |> 
+  filter(type_anomalie == "repa") |> 
+  group_by(categorie) |> 
+  summarise(nombre_interventions = sum(nombre_interventions)) |> 
+  divUtils::plotPareto(catVar = categorie,
+                       numVar = nombre_interventions,
+                       fillVar = categorie,
+                       flip = T
+                       ) +
+  
+# paletteer::scale_fill_paletteer_d(palette = pal_name, name = "") +
+  scale_fill_manual(values = pal_cat, name = "") +
+  labs(title = "Réparations pour 100 DPA",
+       x = "",
+       y = "",
+       subtitle = "Réparations par composant",
+       caption = glue("{n_dpa} DPA du {dat_min} au {dat_max}")
+       ) +
+  theme(legend.position = c(0.8, 0.4))
+customColors::add_trimet_logo()
 ```
