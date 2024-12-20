@@ -48,7 +48,8 @@ d_raw <- readxl::read_xlsx(
   sheet = "data_detail",
   range = "A1:E1000"
 ) |> janitor::clean_names() |> 
-  na.omit()
+  na.omit() |> 
+  mutate(across(where(is.character), .fns = ~stringr::str_to_lower(.x)))
 ### période des données
 dat_min <- min(d_raw$mois) |> format("%d-%m-%Y")
 dat_max <- max(d_raw$mois) |> format("%d-%m-%Y")
@@ -56,14 +57,15 @@ dat_max <- max(d_raw$mois) |> format("%d-%m-%Y")
 cat <- readxl::read_xlsx(
   path = file_path,
   sheet = "listes",
-  range = "C1:D20"
+  range = "C1:D50"
 ) |> janitor::clean_names() |> 
-  na.omit()
+  na.omit() |> 
+  mutate(across(where(is.character), .fns = ~stringr::str_to_lower(.x)))
 # Import des totaux couts par mois
 cout_mois <- readxl::read_xlsx(
   path = file_path,
   sheet = "data_mois",
-  range = "A1:B11"
+  range = "A1:B20"
 ) |> janitor::clean_names() |> 
   na.omit()
 # Concaténation des données
@@ -76,9 +78,41 @@ ddd <- d_raw |>
     cout_mois,
     join_by(mois)
             )
-
+# n_mois nombre de mois analysés
+n_mois <- nrow(cout_mois)
 ```
 
 ```{r}
 #| label: tidy_data
+```
+
+## Vérification des données
+
+### Poste sans cout dans le mois
+
+```{r}
+#| label: couts_poste_mois
+#| include: true
+ddd |> 
+group_by(poste) |> 
+count() |> 
+  ungroup() |> 
+filter(n < n_mois) |> 
+  gt::gt(caption = "Postes non présents tous les mois") |> 
+  gt::opt_stylize(color = "gray")
+```
+
+### Couverture des Coûts Mensuels
+
+> Pourcentage des couts analysés chaque mois
+
+```{r}
+#| label: pc_couts
+#| include: true
+
+ddd |> 
+group_by(mois) |> 
+summarise(pc_cout_analyse = sum(cout)/max(cout_dpa_mois)) |> 
+gt::gt(cap = "% cout analysés") |> 
+gt::fmt_percent(col = pc_cout_analyse, deci = 0)
 ```
