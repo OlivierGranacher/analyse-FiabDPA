@@ -35,10 +35,34 @@ pal_name <- "Austria"
 file_path <- "data/factures_dpa_Mille.xlsx"
 ```
 
+```{r}
+#| label: plot_pareto_cout_fn
+# Définition de la fonction plot_pareto_cout
+plot_pareto_cout <- function(categorie, group_var, title, is_global = FALSE) {
+  if (is_global) {
+    ddd |> 
+      group_by({{group_var}}) |> 
+      summarise(cout_total = sum(cout)/cout_total) |> 
+      divUtils::plotPareto({{group_var}}, cout_total, {{group_var}}, flip = T)
+  } else {
+    ddd |> 
+      filter(categorie == {{categorie}}) |> 
+      group_by({{group_var}}) |> 
+      summarise(cout_total = sum(cout)/cout_total) |> 
+      divUtils::plotPareto({{group_var}}, cout_total, {{group_var}}, flip = T)
+  } +
+    theme(legend.position = "none") +
+    scale_y_continuous(labels = scales::label_percent()) +
+    labs(title = title,
+         subtitle = date_range_title,
+         x = "",
+         y = sub)
+}
+```
+
 ## Objectif
 
-> Visualiser la décomposition des coûts de réparation des DPA sur la \>
-> base des factures mensuelles de Mille
+> Visualiser la décomposition des coûts de réparation des DPA sur la \> base des factures mensuelles de Mille
 
 ```{r}
 #| label: import_data
@@ -80,10 +104,16 @@ ddd <- d_raw |>
             )
 # n_mois nombre de mois analysés
 n_mois <- nrow(cout_mois)
-```
-
-```{r}
-#| label: tidy_data
+# Cout total de tous les mois
+cout_total <- sum(cout_mois$cout_dpa_mois)
+# date range
+### période des données
+mois_min <- min(d_raw$mois) |> format("%B %Y")
+mois_max <- max(d_raw$mois) |> format("%B %Y")
+date_range_title <- glue("{n_mois} mois de {mois_min} à {mois_max}")
+# Subtitle 
+sub <- "% de la facture totale"
+ 
 ```
 
 ## Vérification des données
@@ -113,6 +143,38 @@ filter(n < n_mois) |>
 ddd |> 
 group_by(mois) |> 
 summarise(pc_cout_analyse = sum(cout)/max(cout_dpa_mois)) |> 
-gt::gt(cap = "% cout analysés") |> 
+gt::gt(cap = "% coûts analysés") |> 
 gt::fmt_percent(col = pc_cout_analyse, deci = 0)
+```
+
+## Visualisation des Coûts par composant
+
+```{r}
+#| label: pareto_cout_cat
+#| include: true
+plot_pareto_cout(NULL, categorie, "DPA : Pareto des couts par composant", is_global = TRUE)
+```
+
+## Visualisation des Coûts pour les Vérins Piqueurs
+
+```{r}
+#| label: pareto_cout_vp
+#| include: true
+plot_pareto_cout("verin_piqueur", poste, "Décomposition des Coûts pour les Vérins Piqueurs")
+```
+
+## Visualisation des Coûts pour Pointerolle/Rallonge
+
+```{r}
+#| label: pareto_cout_point
+#| include: true
+plot_pareto_cout("pointerolle_rallonge", poste, "Décomposition des Coûts Pointerolle/Rallonge")
+```
+
+## Visualisation des Coûts Distributeur
+
+```{r}
+#| label: pareto_cout_distr
+#| include: true
+plot_pareto_cout("distributeur", poste, "Décomposition des Coûts Distributeur")
 ```
