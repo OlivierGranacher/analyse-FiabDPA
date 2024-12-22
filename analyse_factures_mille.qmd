@@ -70,9 +70,8 @@ plot_pareto_cout <- function(categorie, group_var, title, is_global = FALSE) {
 d_raw <- readxl::read_xlsx(
   path = file_path,
   sheet = "data_detail",
-  range = "A1:E1000"
+  range = "A:E"
 ) |> janitor::clean_names() |> 
-  na.omit() |> 
   mutate(across(where(is.character), .fns = ~stringr::str_to_lower(.x)))
 ### période des données
 dat_min <- min(d_raw$mois) |> format("%d-%m-%Y")
@@ -81,17 +80,15 @@ dat_max <- max(d_raw$mois) |> format("%d-%m-%Y")
 cat <- readxl::read_xlsx(
   path = file_path,
   sheet = "listes",
-  range = "C1:D50"
+  range = "C:D"
 ) |> janitor::clean_names() |> 
-  na.omit() |> 
   mutate(across(where(is.character), .fns = ~stringr::str_to_lower(.x)))
 # Import des totaux couts par mois
 cout_mois <- readxl::read_xlsx(
   path = file_path,
   sheet = "data_mois",
-  range = "A1:B20"
+  range = "A:B"
 ) |> janitor::clean_names() |> 
-  na.omit()
 # Concaténation des données
 ddd <- d_raw |> 
   left_join(
