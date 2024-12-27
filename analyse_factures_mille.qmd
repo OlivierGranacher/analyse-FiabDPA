@@ -60,18 +60,15 @@ plot_pareto_cout <- function(categorie, group_var, title, is_global = FALSE) {
 }
 ```
 
-## Objectif
-
-> Visualiser la décomposition des coûts de réparation des DPA sur la \> base des factures mensuelles de Mille
-
 ```{r}
 #| label: import_data
 # Import des données des diagnostics et réparations
 d_raw <- readxl::read_xlsx(
   path = file_path,
   sheet = "data_detail",
-  range = "A:E"
-) |> janitor::clean_names() |> 
+  range = "A1:E500" ) |>
+ janitor::clean_names() |> 
+  na.omit() |> 
   mutate(across(where(is.character), .fns = ~stringr::str_to_lower(.x)))
 ### période des données
 dat_min <- min(d_raw$mois) |> format("%d-%m-%Y")
@@ -80,15 +77,17 @@ dat_max <- max(d_raw$mois) |> format("%d-%m-%Y")
 cat <- readxl::read_xlsx(
   path = file_path,
   sheet = "listes",
-  range = "C:D"
+  range = "C1:D500"
 ) |> janitor::clean_names() |> 
-  mutate(across(where(is.character), .fns = ~stringr::str_to_lower(.x)))
+  mutate(across(where(is.character), .fns = ~stringr::str_to_lower(.x))) |> 
+  na.omit()
 # Import des totaux couts par mois
 cout_mois <- readxl::read_xlsx(
   path = file_path,
   sheet = "data_mois",
-  range = "A:B"
+  range = "A1:B500"  
 ) |> janitor::clean_names() |> 
+  na.omit()
 # Concaténation des données
 ddd <- d_raw |> 
   left_join(
@@ -113,6 +112,24 @@ sub <- "% de la facture totale"
  
 ```
 
+```{r}
+#| label: colors
+# Définition des couleurs pour les graphiques
+cat_list <- ddd |> 
+  group_by(categorie) |> 
+  summarise(cout_cat = sum(cout)) |> 
+  arrange(desc(cout_cat)) |> 
+  pull(categorie)
+
+pal_cat <- MetBrewer::met.brewer(pal_name, length(cat_list))
+names(pal_cat) <- cat_list
+```
+
+## Objectif
+
+> Visualiser la décomposition des coûts de réparation des DPA sur la \>
+> base des factures mensuelles de Mille
+
 ## Vérification des données
 
 ### Poste sans cout dans le mois
@@ -122,9 +139,10 @@ sub <- "% de la facture totale"
 #| include: true
 ddd |> 
 group_by(poste) |> 
-count() |> 
+summarise(n_mois_manquant = n_mois - n()) |> 
   ungroup() |> 
-filter(n < n_mois) |> 
+filter(n_mois_manquant > 0) |> 
+  arrange(desc(n_mois_manquant)) |> 
   gt::gt(caption = "Postes non présents tous les mois") |> 
   gt::opt_stylize(color = "gray")
 ```
@@ -149,7 +167,7 @@ gt::fmt_percent(col = pc_cout_analyse, deci = 0)
 ```{r}
 #| label: pareto_cout_cat
 #| include: true
-plot_pareto_cout(NULL, categorie, "DPA : Pareto des couts par composant", is_global = TRUE)
+plot_pareto_cout(NULL, categorie, "DPA : Pareto des couts par Composant", is_global = TRUE)
 ```
 
 ## Visualisation des Coûts pour les Vérins Piqueurs
@@ -157,7 +175,7 @@ plot_pareto_cout(NULL, categorie, "DPA : Pareto des couts par composant", is_glo
 ```{r}
 #| label: pareto_cout_vp
 #| include: true
-plot_pareto_cout("verin_piqueur", poste, "Décomposition des Coûts pour les Vérins Piqueurs")
+plot_pareto_cout("verin_piqueur", poste, "Décomposition des Coûts  Vérins Piqueurs")
 ```
 
 ## Visualisation des Coûts pour Pointerolle/Rallonge
@@ -174,4 +192,24 @@ plot_pareto_cout("pointerolle_rallonge", poste, "Décomposition des Coûts Point
 #| label: pareto_cout_distr
 #| include: true
 plot_pareto_cout("distributeur", poste, "Décomposition des Coûts Distributeur")
+```
+
+## Nombre de DPA réparés
+
+```{r}
+#| label: nb_dpa_transport
+#| include: true
+ddd |> 
+  filter(poste == "prise_en_charge_transport") |> 
+  group_by(mois) |> 
+  summarise(nb_dpa = sum(nombre)) |> 
+  ggplot(aes(x = mois, y = nb_dpa)) +
+  geom_col(fill = pal_cat["verin_piqueur"]) +
+  geom_text(aes(label = nb_dpa), vjust = -0.5) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b-%y") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Nombre de DPA transportés par mois",
+       subtitle = date_range_title,
+       x = "",
+       y = "Nombre de DPA")
 ```
