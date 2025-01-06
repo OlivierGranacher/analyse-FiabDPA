@@ -36,31 +36,6 @@ file_path <- "data/factures_dpa_Mille.xlsx"
 ```
 
 ```{r}
-#| label: plot_pareto_cout_fn
-# Définition de la fonction plot_pareto_cout
-plot_pareto_cout <- function(categorie, group_var, title, is_global = FALSE) {
-  if (is_global) {
-   p <-  ddd |> 
-      group_by({{group_var}}) |> 
-      summarise(cout_total = sum(cout)/cout_total) |> 
-      divUtils::plotPareto({{group_var}}, cout_total, {{group_var}}, flip = T)
-  } else {
-    p <- ddd |> 
-      filter(categorie == {{categorie}}) |> 
-      group_by({{group_var}}) |> 
-      summarise(cout_total = sum(cout)/cout_total) |> 
-      divUtils::plotPareto({{group_var}}, cout_total, {{group_var}}, flip = T)
-  } 
-  p + theme(legend.position = "none") +
-    scale_y_continuous(labels = scales::label_percent()) +
-    labs(title = title,
-         subtitle = date_range_title,
-         x = "",
-         y = sub)
-}
-```
-
-```{r}
 #| label: import_tidy_data
 # Import des données des diagnostics et réparations
 d_raw <- readxl::read_xlsx(
@@ -119,6 +94,8 @@ cout_mois <- ddd |>
   select(mois, nombre) |> 
   right_join(cout_mois, join_by(mois)) |> 
   rename(nb_dpa = nombre)
+# Nombre moyen de DPA réparés par mois
+nb_dpa_moy = mean(cout_mois$nb_dpa) |> round(1)
 # Création de la catégorie autres pour les couts sans catégorie
 ddd <- ddd |> 
   group_by(mois) |> 
@@ -133,6 +110,9 @@ ddd <- ddd |>
   select(-c(cout_cat, nb_dpa)) |> 
   bind_rows(ddd)
   
+# Nombre de postes par categorie
+cat <- cat |> 
+  add_count(categorie, name = "n_postes")
 ```
 
 ```{r}
@@ -148,10 +128,222 @@ pal_cat <- MetBrewer::met.brewer(pal_name, length(cat_list))
 names(pal_cat) <- cat_list
 ```
 
+```{r}
+#| label: plot_pareto_cout_fn
+# Pareto des coûts par categorie
+plot_pareto_cout <- function(d = ddd, .cat = "verin_piqueur", pal = pal_cat) {
+  # definition de la palette de couleurs
+  nb_postes <- cat |> 
+    filter(categorie == .cat) |> 
+    pull() |> mean()
+  base_col <- pal[.cat] 
+  col_val <- customColors::colorRangeOneColor(nb_postes,
+                                              base_col,
+                                              rev = T,
+                                              begin = 25,
+                                              end = 70
+                                              )
+  d |> 
+    filter(categorie == .cat) |> 
+    group_by(poste) |> 
+    summarise(cout_poste = sum(cout)/cout_total) |> 
+    mutate(poste = forcats::fct_reorder(
+      poste,
+      cout_poste,
+      .desc = F
+    )) |> 
+   ggplot(aes(x = cout_poste, 
+             y = poste)
+         
+         ) +
+  geom_col(aes(fill = poste) , color = "grey20"
+           ) +
+  scale_fill_manual(values = col_val ) +
+  scale_x_continuous(labels = scales::label_percent()) +
+  labs(x = "",
+       title = glue("Coûts {.cat}"),
+       subtitle = sub,
+       caption = date_range_title,
+       y = "") +
+  theme(legend.position = 'none'
+      )
+}
+#plot_pareto_cout()
+```
+
 ## Objectif
 
-> Visualiser la décomposition des coûts de réparation des DPA sur la \>
+> Visualiser la décomposition des coûts de réparation des DPA sur la
 > base des factures mensuelles de Mille
+
+## Nombre de DPA réparés
+
+```{r}
+#| label: nb_dpa_mois
+#| include: true 
+ddd |>   
+  filter(poste == "prise_charge_transport") |>   
+  group_by(mois) |>    
+  summarise(nb_dpa = sum(nombre)) |>   
+  ggplot(aes(x = mois, y = nb_dpa)) +   
+  geom_col(fill = pal_cat["prise_charge_transport"], alpha = .8, color = "gray20") +   
+  geom_text(aes(label = nb_dpa, y = nb_dpa -10), color = "white") + 
+  geom_hline(yintercept = nb_dpa_moy, lty = 2, color = "gray40") +
+  scale_x_datetime(date_breaks = "1 month", labels = scales::label_date_short()) +
+  theme(axis.text.x = element_text( hjust = 1)) +   
+  labs(title = "Nombre de DPA réparés par mois",
+       x = "",
+       y = "")
+```
+
+## Nombre Maintenance Vérins Piqueur
+
+```{r}
+#| label: nb_maint_2
+#| include: true 
+ddd |>   
+  filter(poste %in% c("maintenance_niveau2", "joints_piqueur", "remise_etat_dpa", "maintenance_niveau1")) |>   
+  group_by(mois, categorie, poste) |>    
+  summarise(nb_rep = sum(nombre)) |>   
+  ggplot(aes(x = mois, y = nb_rep, color = poste, group = poste)) +   
+  geom_line() + 
+  geom_point() +
+  geom_text(aes(label = nb_rep, y = nb_rep + 4), label.size = 1) + 
+  geom_hline(yintercept = nb_dpa_moy, lty = 2, color = "gray40") +
+  MetBrewer::scale_color_met_d(pal_name) +
+  scale_x_datetime(date_breaks = "1 month", labels = scales::label_date_short()) +
+  theme(axis.text.x = element_text( hjust = .5),
+        legend.text = element_text(face = "bold"),
+        legend.title = element_blank()
+        ) +   
+  labs(title = "Réparations vérins piqueur ",
+       x = "",
+       y = "") +
+  guides(
+    color = guide_legend(reverse = T)
+  )
+```
+
+## Coûts Mensuels par Composant
+
+```{r}
+#| label: visu_couts_mois
+#| include: true
+ddd |>
+  group_by(mois, categorie) |>
+  summarise(cout_mois_compos = sum(cout)) |> 
+  ggplot(aes(x = mois, fill = forcats::fct_reorder(categorie, cout_mois_compos), y = cout_mois_compos)) +
+  geom_col( alpha = .9, color = "black") +
+  geom_hline(yintercept = cout_moyen_mois, lty = 2, alpha = .5) +
+  geom_text(data = cout_mois, aes(x = mois, y = 5000, label= nb_dpa), inherit.aes = F, color = "white", size = 3, face = "bold") +
+  scale_x_datetime(labels = scales::label_date_short(),
+                   date_breaks = "1 month"
+                   ) +
+  scale_y_continuous(labels = scales::label_number(suffix = "€")) +
+  scale_fill_manual(values = pal_cat, name = "") +
+  labs(title = "Couts DPA mensuels par composant",
+       caption = glue("Cout moyen mensuel : {cout_moyen_mois}€ \n {date_range_title}"),
+      x = "", y = ""                 
+       ) +
+  theme(
+        legend.key.size = unit(.8, "lines")
+        )
+    
+```
+
+## Coûts par composant
+
+```{r}
+#| label: pareto_cout_cat
+#| include: true
+ddd |> 
+  group_by(categorie) |> 
+  summarise(cout_cat = sum(cout)/cout_total) |> 
+  ggplot(aes(x = cout_cat, 
+             y = forcats::fct_reorder(
+               categorie,
+               cout_cat,
+               .desc = F
+               )
+             )
+         
+         ) +
+  geom_col(aes(fill = forcats::fct_reorder(
+               categorie,
+               cout_cat,
+               .desc = T
+               ))
+           , color = "grey20"
+           ) +
+  scale_fill_manual(values = pal_cat ) +
+  scale_x_continuous(labels = scales::label_percent()) +
+  labs(x = "",
+       title = "Coûts DPA par composant",
+       subtitle = sub,
+       caption = date_range_title,
+       y = "") +
+  theme(legend.position = 'none'
+      )
+```
+
+## Poste de Coûts Principaux
+
+```{r}
+#| label: pareto_couts_postes
+#| include: true
+
+# Nombre de Couts à afficher
+nb_couts_aff <- 6 
+ddd |> 
+  group_by(categorie, poste) |> 
+  summarise(cout_poste = sum(cout)/cout_total) |> 
+  arrange(desc(cout_poste)) |> 
+  head(nb_couts_aff) |> 
+  ggplot(aes(x = cout_poste, 
+             y = forcats::fct_reorder(
+               poste,
+               cout_poste,
+               .desc = F
+               )
+             )
+         
+         ) +
+  geom_col(mapping = aes(fill = categorie), color = "grey20"
+           ) +
+  scale_fill_manual(values = pal_cat ) +
+  scale_x_continuous(labels = scales::label_percent()) +
+  labs(x = "",
+       title = glue("Coûts DPA par poste"),
+       subtitle = glue("({nb_couts_aff} plus élevés)"),
+       caption = date_range_title,
+       y = "") +
+  theme(legend.position = 'none'
+      )
+```
+
+## Coûts pour les Vérins Piqueurs
+
+```{r}
+#| label: pareto_cout_vp
+#| include: true
+plot_pareto_cout(.cat = "verin_piqueur")
+```
+
+## Coûts pour Pointerolle/Rallonge
+
+```{r}
+#| label: pareto_cout_point
+#| include: true
+plot_pareto_cout(.cat = "pointerolle_rallonge")
+```
+
+## Coûts Distributeur
+
+```{r}
+#| label: pareto_cout_distr
+#| include: true
+plot_pareto_cout(.cat = "distributeur")
+```
 
 ## Vérification des données
 
@@ -179,85 +371,9 @@ filter(n_mois_manquant > 0) |>
 #| include: true
 
 ddd |> 
+  filter(poste != "autres") |> 
 group_by(mois) |> 
 summarise(pc_cout_analyse = sum(cout)/max(cout_dpa_mois)) |> 
 gt::gt(cap = "% coûts analysés") |> 
 gt::fmt_percent(col = pc_cout_analyse, deci = 0)
-```
-
-## Coûts Mensuels par Composant
-
-```{r}
-#| label: visu_couts_mois
-#| include: true
-ddd |>
-  group_by(mois, categorie) |>
-  summarise(cout_mois_compos = sum(cout)) |> 
-  ggplot(aes(x = mois, fill = forcats::fct_reorder(categorie, cout_mois_compos), y = cout_mois_compos)) +
-  geom_col( alpha = .9, color = "black") +
-  geom_hline(yintercept = cout_moyen_mois, lty = 2, alpha = .5) +
-  geom_text(data = cout_mois, aes(x = mois, y = 5000, label= nb_dpa), inherit.aes = F, color = "white", size = 3, face = "bold") +
-  scale_x_datetime(labels = scales::label_date_short()) +
-  scale_y_continuous(labels = scales::label_number(suffix = "€")) +
-  scale_fill_manual(values = pal_cat, name = "") +
-  labs(title = "Couts DPA mensuels par composant",
-       caption = glue("Cout moyen mensuel : {cout_moyen_mois}€ \n {date_range_title}"),
-      x = "", y = ""                 
-       ) +
-  theme(
-        legend.key.size = unit(.8, "lines")
-        )
-    
-```
-
-## Coûts par composant
-
-```{r}
-#| label: pareto_cout_cat
-#| include: true
-plot_pareto_cout(NULL, categorie, "DPA : Pareto des couts par Composant", is_global = TRUE)
-```
-
-## Coûts pour les Vérins Piqueurs
-
-```{r}
-#| label: pareto_cout_vp
-#| include: true
-plot_pareto_cout("verin_piqueur", poste, "Décomposition des Coûts  Vérins Piqueurs")
-```
-
-## Coûts pour Pointerolle/Rallonge
-
-```{r}
-#| label: pareto_cout_point
-#| include: true
-plot_pareto_cout("pointerolle_rallonge", poste, "Décomposition des Coûts Pointerolle/Rallonge")
-```
-
-## Coûts Distributeur
-
-```{r}
-#| label: pareto_cout_distr
-#| include: true
-plot_pareto_cout("distributeur", poste, "Décomposition des Coûts Distributeur")
-```
-
-## Nombre de DPA réparés
-
-```{r}
-#| label: nb_dpa_transport
-#| include: true
-ddd |> 
-  filter(poste == "prise_en_charge_transport") |> 
-  group_by(mois) |> 
-  summarise(nb_dpa = sum(nombre)) |> 
-  ggplot(aes(x = mois, y = nb_dpa)) +
-  geom_col(fill = pal_cat["verin_piqueur"]) +
-  geom_text(aes(label = nb_dpa), vjust = -0.5) +
-  scale_x_date(date_breaks = "1 month", date_labels = "%b-%y") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "Nombre de DPA transportés par mois",
-       subtitle = date_range_title,
-       x = "",
-       y = "Nombre de DPA")
 ```
