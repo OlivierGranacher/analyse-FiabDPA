@@ -32,7 +32,7 @@ library(ggplot2)
 theme_set(customColors::theme_potline())
 # palette name pour plots - MetBrewer Package
 pal_name <- "Austria"
-alpha <- .7
+alpha <- .3
 file_path <- "data/Suivi_Panne_DPAA_12_2024.xlsx"
 ```
 
@@ -45,7 +45,7 @@ d_raw <- readxl::read_xlsx(
   range = "E1:H200" ) |>
  janitor::clean_names() |> 
   filter(!is.na(panne_cuve_1)) |> 
-  mutate(across(where(is.character), .fns = ~stringr::str_to_lower(.x))) |> 
+  mutate(across(where(is.character), .fns = ~stringr::str_to_title(.x))) |> 
   mutate(cas = row_number())
 # d_raw_long
 d_raw_lg <- d_raw |> 
@@ -65,7 +65,7 @@ n_anomalie_mille <- d_raw_lg |>
 
 # Attribution des couleurs
 list_anom <- unique(d_raw_lg$type_anomalie)
-pal_anom <- MetBrewer::met.brewer(pal_name, length(list_anom)) |> alpha(alpha)
+pal_anom <- MetBrewer::met.brewer(pal_name, length(list_anom)) 
 names(pal_anom) <- list_anom
 ```
 
@@ -74,7 +74,7 @@ names(pal_anom) <- list_anom
 > Etablir la correspondance entre les pannes DPA relevées sur cuves et
 > les réparations faites par Mille sur les DPA
 
-## Pareto des Pannes sur cuve
+## Pareto des Pannes sur Cuves
 
 ```{r}
 #| label: pareto_pannes_cuve
@@ -93,6 +93,8 @@ d_raw_lg |>
        )
 ```
 
+## Pareto des Réparations Mille
+
 ```{r}
 #| label: pareto_rep_mille
 #| include: true
@@ -108,4 +110,62 @@ d_raw_lg |>
        x = "",
        y = ""
        )
+```
+
+## Relations Pannes sur Cuves / Réparations faites
+
+```{r}
+#| label: groups_panne_cuves
+#| include: true
+d_raw |> 
+  group_by(panne_cuve_1, panne_cuve_2) |> 
+  count() |> 
+  ungroup() |> 
+  arrange(desc(n)) |> 
+  gt::gt(
+    caption = "Répartition des Anomalies sur Cuves"
+  ) |> 
+  gt::opt_stylize() |> 
+  gt::sub_missing()
+```
+
+```{r}
+#| label: groups_rep_mille
+#| include: true
+d_raw |> 
+  group_by(defaillances_mille_1, defaillances_mille_2) |> 
+  count() |> 
+  ungroup() |> 
+  arrange(desc(n)) |> 
+  gt::gt(
+    caption = "Répartition des Réparations chez Mille"
+  ) |> 
+  gt::opt_stylize() |> 
+  gt::sub_missing()
+```
+
+```{r}
+#| label: data_sankey
+#| include: true
+# Mise en forme des données pour le diagramme Sankey
+d_sankey <- d_raw |> 
+  mutate(panne_cuve_2 = stringr::str_remove(pattern = "Anomalie ", panne_cuve_2 ),
+         defaillances_mille_2 = stringr::str_remove(pattern = "Anomalie ", defaillances_mille_2)
+         ) |> 
+  tidyr::replace_na(list(panne_cuve_2 = "", 
+                         defaillances_mille_2 = ""
+                         )
+                    ) |>  
+  tidyr::unite(col = "anomalie_cuve", panne_cuve_1, panne_cuve_2, sep = " ", na.rm = T, remove = F) |> 
+  tidyr::unite(col = "anomalie_mille", defaillances_mille_1, defaillances_mille_2, sep = " ", na.rm = T, remove = F) |> 
+  mutate(anomalie_mille = stringr::str_replace(anomalie_mille, "Anomalie", "Réparation" )) |> 
+  mutate(anomalie_mille = stringr::str_replace(anomalie_mille, "Ras", "RAS" )) |>
+  group_by(anomalie_cuve, anomalie_mille) |> 
+  count() |> 
+  arrange(desc(n))
+  divUtils::plotSankey(d_sankey, n, textSize = 3.5) +
+    labs(title = "Relation entre Panne sur Cuves et Réparations Mille",
+         subtitle = glue("{n_mes} DPA"),
+      x = "", y = "") +
+    theme(axis.text = element_blank())
 ```
