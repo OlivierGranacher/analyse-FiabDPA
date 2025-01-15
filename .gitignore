@@ -6,3 +6,4 @@ figs
 *.html
 *.xlsx
 data/
+.vscode

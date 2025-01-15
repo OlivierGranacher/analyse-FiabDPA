@@ -1,0 +1,111 @@
+---
+title: "Analyse des pannes DPA Trimet / Mille"
+author: "OG"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+date: last-modified
+lang: fr
+code-fold: true
+number-sections: true
+editor: visual
+fig-width: 8
+fig-asp: .62
+fig-align: left
+execute:
+  eval: true
+  cache: false
+  warning: false
+  echo: false
+  include: false
+theme: flatly
+---
+
+```{r}
+#| label: setup
+#| cache: true
+library(dplyr)
+library(glue)
+library(lubridate)
+library(ggplot2)
+theme_set(customColors::theme_potline())
+# palette name pour plots - MetBrewer Package
+pal_name <- "Austria"
+alpha <- .7
+file_path <- "data/Suivi_Panne_DPAA_12_2024.xlsx"
+```
+
+```{r}
+#| label: import_tidy_data
+# Import des données des diagnostics et réparations
+d_raw <- readxl::read_xlsx(
+  path = file_path,
+  sheet = "Synthese",
+  range = "E1:H200" ) |>
+ janitor::clean_names() |> 
+  filter(!is.na(panne_cuve_1)) |> 
+  mutate(across(where(is.character), .fns = ~stringr::str_to_lower(.x))) |> 
+  mutate(cas = row_number())
+# d_raw_long
+d_raw_lg <- d_raw |> 
+  tidyr::pivot_longer(cols = starts_with(c("pan", "de")),
+                      names_to = "origine",
+                      values_to = "type_anomalie"
+                      ) |> 
+  na.omit()
+# stats
+n_mes <- nrow(d_raw)
+n_anomalie_cuve <- d_raw_lg |> 
+  filter(stringr::str_starts(origine, "pa")) |> 
+  count() |> pull()
+n_anomalie_mille <- d_raw_lg |> 
+  filter(stringr::str_starts(origine, "de")) |> 
+  count() |> pull()
+
+# Attribution des couleurs
+list_anom <- unique(d_raw_lg$type_anomalie)
+pal_anom <- MetBrewer::met.brewer(pal_name, length(list_anom)) |> alpha(alpha)
+names(pal_anom) <- list_anom
+```
+
+## Objectif
+
+> Etablir la correspondance entre les pannes DPA relevées sur cuves et
+> les réparations faites par Mille sur les DPA
+
+## Pareto des Pannes sur cuve
+
+```{r}
+#| label: pareto_pannes_cuve
+#| include: true
+d_raw_lg |> 
+  filter(stringr::str_starts(origine, "pa")) |> 
+  group_by(type_anomalie) |> 
+  count() |> 
+  divUtils::plotPareto(catVar = type_anomalie, n, fillVar =  type_anomalie, flip = T) +
+  scale_fill_manual(values = pal_anom) +
+  guides(fill = "none") +
+  labs(title = "Distribution des Anomalies sur cuve",
+       subtitle = glue("{n_mes} DPA / {n_anomalie_cuve} anomalies"),
+       x = "",
+       y = ""
+       )
+```
+
+```{r}
+#| label: pareto_rep_mille
+#| include: true
+d_raw_lg |> 
+  filter(stringr::str_starts(origine, "de")) |> 
+  group_by(type_anomalie) |> 
+  count() |> 
+  divUtils::plotPareto(catVar = type_anomalie, n, fillVar =  type_anomalie, flip = T) +
+  scale_fill_manual(values = pal_anom) +
+  guides(fill = "none") +
+  labs(title = "Distribution des Réparations Mille",
+       subtitle = glue("{n_mes} DPA / {n_anomalie_mille} réparations"),
+       x = "",
+       y = ""
+       )
+```
