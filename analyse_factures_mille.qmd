@@ -113,6 +113,12 @@ ddd <- ddd |>
 # Nombre de postes par categorie
 cat <- cat |> 
   add_count(categorie, name = "n_postes")
+# expand grid pour postes à zéro dans le mois
+ddd <- expand.grid(mois = unique(ddd$mois), poste = unique(ddd$poste)) |> 
+  left_join(ddd, join_by(mois, poste)) |> 
+  select(-categorie) |> 
+  inner_join(cat, join_by(poste)) |> 
+  tidyr::replace_na(list(cout_dpa_mois = 0, nombre = 0, cout = 0 , prix_unitaire = 0))
 ```
 
 ```{r}
@@ -146,7 +152,7 @@ plot_pareto_cout <- function(d = ddd, .cat = "verin_piqueur", pal = pal_cat) {
   d |> 
     filter(categorie == .cat) |> 
     group_by(poste) |> 
-    summarise(cout_poste = sum(cout)/cout_total) |> 
+    summarise(cout_poste = sum(cout, na.rm = T)/cout_total) |> 
     mutate(poste = forcats::fct_reorder(
       poste,
       cout_poste,
@@ -206,7 +212,7 @@ ddd |>
   group_by(mois, categorie, poste) |>    
   summarise(nb_rep = sum(nombre)) |>   
   ggplot(aes(x = mois, y = nb_rep, color = poste, group = poste)) +   
-  geom_line() + 
+  geom_line(size = 1.5) + 
   geom_point() +
   geom_text(aes(label = nb_rep, y = nb_rep + 4), label.size = 1) + 
   geom_hline(yintercept = nb_dpa_moy, lty = 2, color = "gray40") +
@@ -217,6 +223,33 @@ ddd |>
         legend.title = element_blank()
         ) +   
   labs(title = "Réparations vérins piqueur ",
+       x = "",
+       y = "") +
+  guides(
+    color = guide_legend(reverse = T)
+  )
+```
+
+## Nombre de Pointerolles et Râcleurs
+
+```{r}
+#| label: nb_point
+#| include: true 
+ddd |>   
+  filter(poste %in% c("pointerolle", "racleur")) |>   
+  group_by(mois, categorie, poste) |>    
+  summarise(nb_rep = sum(nombre)) |>   
+  ggplot(aes(x = mois, y = nb_rep, color = poste, group = poste)) +   
+  geom_line(size = 1.5) + 
+  geom_point() +
+  geom_text(aes(label = nb_rep, y = nb_rep + 4), label.size = 1) + 
+  MetBrewer::scale_color_met_d(pal_name) +
+  scale_x_datetime(date_breaks = "1 month", labels = scales::label_date_short()) +
+  theme(axis.text.x = element_text( hjust = .5),
+        legend.text = element_text(face = "bold"),
+        legend.title = element_blank()
+        ) +   
+  labs(title = "Remplacements Pointerolle/Râcleur",
        x = "",
        y = "") +
   guides(
@@ -236,6 +269,7 @@ ddd |>
   geom_col( alpha = .9, color = "black") +
   geom_hline(yintercept = cout_moyen_mois, lty = 2, alpha = .5) +
   geom_text(data = cout_mois, aes(x = mois, y = 5000, label= nb_dpa), inherit.aes = F, color = "white", size = 3, face = "bold") +
+  annotate(geom = "text", x = min(ddd$mois), y = cout_moyen_mois + 3000, label = "coût mensuel moyen" , hjust = 0, color = "grey50") +
   scale_x_datetime(labels = scales::label_date_short(),
                    date_breaks = "1 month"
                    ) +
@@ -258,7 +292,7 @@ ddd |>
 #| include: true
 ddd |> 
   group_by(categorie) |> 
-  summarise(cout_cat = sum(cout)/cout_total) |> 
+  summarise(cout_cat = sum(cout, na.rm = T)/cout_total) |> 
   ggplot(aes(x = cout_cat, 
              y = forcats::fct_reorder(
                categorie,
