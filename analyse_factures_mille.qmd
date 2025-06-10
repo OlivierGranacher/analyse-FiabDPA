@@ -202,6 +202,106 @@ ddd |>
        y = "")
 ```
 
+## Coût Moyen par DPA
+
+```{r}
+#| label: periodes_cout_DPA
+## Définition des périodes des couts par DPA ----
+# Date de fin de la surfacturation des joints de vérins piqueur
+dat_surf <- "01-07-2024"
+# Date de début d'envoi des diagnotics chez Mille
+dat_diag <- "28-02-2025"
+# Ajout des périodes à cout_mois
+cout_mois <- cout_mois |> 
+  mutate(
+    periode =
+      case_when(
+        mois < dmy(dat_surf) ~ 1,
+        between(mois, dmy(dat_surf), dmy(dat_diag)) ~ 2, 
+        .default = 3
+      )
+  ) |> 
+  mutate(
+    cout_par_dpa = round(cout_dpa_mois / nb_dpa, -1)
+  ) |>
+  group_by(periode
+  ) |> 
+  mutate(
+    cout_moy_periode_dpa = round(mean(cout_par_dpa), 0)
+  ) |> 
+  arrange(mois)
+## libellés périodes ----
+per <- tibble(
+  periode = unique(cout_mois$periode),
+  desc_periode = c("Erreur facturation joints",
+          "Facturation joints correcte",
+          "Transmission des diagnostics"
+          )
+)
+
+```
+
+```{r}
+#| label: cout_moy_dpa
+#| include: true
+cout_mois |> 
+  ggplot(aes(mois, y = cout_dpa_mois/nb_dpa)) +
+  scale_x_datetime(date_breaks = "1 month", labels = scales::label_date_short()) +
+  scale_y_continuous(labels = scales::label_dollar(prefix = "€", big.mark = ".")) +
+  geom_line(linewidth = 1, color = "darkorange", alpha = .4) +
+geom_step(aes(mois, cout_moy_periode_dpa), color = "darkorange2", linewidth = 1) +
+#  geom_vline(xintercept = as_datetime(dmy(c(dat_surf, dat_diag))), lty = 3) +
+  labs(title = "Cout réparation moyen par DPA",
+       subtitle = "base factures Mille"
+       ) +
+  annotate(  # arrow 1
+    "segment",
+    x = as_datetime(dmy("06072024")),
+    xend = as_datetime(dmy("01092024")),
+    y = 1200,
+    yend = 1350,
+   arrow =  arrow(type = "open", length = unit(0.025, "npc"), ends = "first"
+                  )
+  ) +
+  annotate( # arrow 2
+    "segment",
+    x = as_datetime(dmy("01012025")),
+    xend = as_datetime(dmy("01032025")),
+    y = 1190,
+    yend = 980,
+   arrow =  arrow(type = "open", length = unit(0.025, "npc"), ends = "last"
+                  )
+  ) +
+  annotate( # text 1
+    "text",
+    x = as_datetime(dmy("15082024")),
+    y = 1400,
+    label = "Fin de l'erreur de facturation \n des joints de piqueur",
+    size = 3
+  ) +
+  annotate( # text 2
+    "text",
+    x = as_datetime(dmy("01012025")),
+    y = 1250,
+    label = "Début de l'envoi des diagnostics \n à Mille",
+    size = 3
+  )
+
+```
+
+```{r}
+#| label: table_couts_moyens
+#| include: true
+cout_mois |> 
+  inner_join(per, join_by(periode)) |> 
+  group_by(desc_periode) |> 
+  summarise(
+    cout_moyen_dpa = round(mean(cout_par_dpa), -1)
+  ) |>  
+  gt::gt(cap = "Evolution du cout moyen par DPA par période") |> 
+  gt::fmt_currency(cout_moyen_dpa, currency = "EUR", decimals = 0)
+```
+
 ## Nombre Maintenance Vérins Piqueur
 
 ```{r}

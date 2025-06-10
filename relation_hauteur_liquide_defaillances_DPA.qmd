@@ -1,0 +1,51 @@
+---
+title: "Evaluation Effet hauteur Liquide sur défaillances DPA"
+author: "OG"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+date: last-modified
+lang: fr
+code-fold: true
+number-sections: true
+editor: visual
+fig-width: 8
+fig-asp: .62
+fig-align: left
+execute:
+  eval: true
+  cache: false
+  warning: false
+  echo: false
+  include: false
+theme: flatly
+---
+
+```{r}
+#| label: setup
+#| cache: true
+#| message: false
+#| warning: false
+library(dplyr)
+library(glue)
+library(lubridate)
+```
+
+```{r}
+#| label: data
+## données moyennes de hauteur 
+dhl <- divUtils::run_sql_file("sql/cj_avg_hb_hm.sql")
+```
+
+```{r}
+#| label: export_data_dhl
+#| eval: false
+writexl::write_xlsx(dhl, "data/data_hauteur_liquide_G_2025.xlsx")
+```
+
+```{r}
+#| label: plot_pc_tps_limit
+#| include: true
+#| layout-ncol: 1
+```

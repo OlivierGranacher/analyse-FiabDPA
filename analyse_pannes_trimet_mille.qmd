@@ -42,20 +42,20 @@ file_path <- "data/Suivi_Panne_DPAA_12_2024.xlsx"
 d_raw <- readxl::read_xlsx(
   path = file_path,
   sheet = "Synthese",
-  range = "E1:H200" ) |>
+  range = "E1:J200" ) |>
  janitor::clean_names() |> 
   filter(!is.na(panne_cuve_1)) |> 
   mutate(across(where(is.character), .fns = ~stringr::str_to_title(.x))) |> 
   mutate(cas = row_number())
 # d_raw_long
 d_raw_lg <- d_raw |> 
-  tidyr::pivot_longer(cols = starts_with(c("pan", "de")),
+  tidyr::pivot_longer(cols = starts_with(c("pan", "de", "con")),
                       names_to = "origine",
                       values_to = "type_anomalie"
                       ) |> 
   na.omit()
 # stats
-n_mes <- nrow(d_raw)
+n_dpa <- nrow(d_raw)
 n_anomalie_cuve <- d_raw_lg |> 
   filter(stringr::str_starts(origine, "pa")) |> 
   count() |> pull()
@@ -87,7 +87,7 @@ d_raw_lg |>
   scale_fill_manual(values = pal_anom) +
   guides(fill = "none") +
   labs(title = "Distribution des Anomalies sur cuve",
-       subtitle = glue("{n_mes} DPA / {n_anomalie_cuve} anomalies"),
+       subtitle = glue("{n_dpa} DPA / {n_anomalie_cuve} anomalies"),
        x = "",
        y = ""
        )
@@ -106,7 +106,7 @@ d_raw_lg |>
   scale_fill_manual(values = pal_anom) +
   guides(fill = "none") +
   labs(title = "Distribution des Réparations Mille",
-       subtitle = glue("{n_mes} DPA / {n_anomalie_mille} réparations"),
+       subtitle = glue("{n_dpa} DPA / {n_anomalie_mille} réparations"),
        x = "",
        y = ""
        )
@@ -115,18 +115,23 @@ d_raw_lg |>
 ## Relations Pannes sur Cuves / Réparations faites
 
 ```{r}
-#| label: groups_panne_cuves
+#| label: groups_conclusion
 #| include: true
-d_raw |> 
-  group_by(panne_cuve_1, panne_cuve_2) |> 
-  count() |> 
-  ungroup() |> 
+d_raw_lg |> 
+  filter(stringr::str_starts(origine, "con")) |> 
+  group_by(type_anomalie)  |> 
+  summarise(n = n()/n_dpa) |> 
+  ungroup()  |> 
   arrange(desc(n)) |> 
   gt::gt(
-    caption = "Répartition des Anomalies sur Cuves"
+    caption = glue("Interventions Mille sur {n_dpa} DPA")
   ) |> 
   gt::opt_stylize() |> 
-  gt::sub_missing()
+  gt::fmt_percent(columns = n, decimals = 0) |> 
+  gt::cols_label(
+    type_anomalie = "Intervention Mille",
+    n = "%"
+  )
 ```
 
 ```{r}
@@ -165,7 +170,7 @@ d_sankey <- d_raw |>
   arrange(desc(n))
   divUtils::plotSankey(d_sankey, n, textSize = 3.5) +
     labs(title = "Relation entre Panne sur Cuves et Réparations Mille",
-         subtitle = glue("{n_mes} DPA"),
+         subtitle = glue("{n_dpa} DPA"),
       x = "", y = "") +
     theme(axis.text = element_blank())
 ```
