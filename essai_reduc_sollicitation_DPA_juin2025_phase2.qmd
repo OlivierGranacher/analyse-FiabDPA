@@ -1,0 +1,242 @@
+---
+title: "Analyse de l'essai de réduciton de sollicitation des DPA - Phase 2"
+author: "OG"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+date: last-modified
+lang: fr
+code-fold: true
+number-sections: true
+editor: visual
+fig-width: 8
+fig-asp: .62
+fig-align: left
+execute:
+  eval: true
+  cache: false
+  warning: false
+  echo: false
+  include: false
+theme: flatly
+---
+
+```{r}
+#| label: setup
+#| cache: true
+library(dplyr, quietly = T)
+library(glue)
+library(lubridate)
+library(ggplot2)
+theme_set(customColors::theme_potline())
+# Params 
+dat_deb_data <- "20250501"
+dat_deb_essai_plot <- "20250611"
+age_lim <- 100 # age mini des cuves en jour
+c <- elr::dbConnect.dte()
+```
+
+```{r}
+#| label: data
+# lecture des données cp 
+dcp <- divUtils::run_sql_file("sql/cp_soll.sql") |> 
+  mutate(dat = as_date(floor_date(dat, "d")))
+# Liste des cuves d'essai
+d_cuves <- readxl::read_xlsx("data/liste_cuves_essai_soll_DPA.xlsx") 
+dcuves_essai <- d_cuves |> 
+  filter(groupe == "essai_soll_DPA") |> 
+  select(cod_cuve)
+cuves_essai <- dcuves_essai$cod_cuve
+
+
+## Cuves de l'essai initial de sollicitation : à supprimer de la période de référence
+cuves_essai_init <- c('G061', 'G065', 'G069', 'G073', 'G077', 'G081', 'G085', 'G089', 'G093', 'G097', 'G062', 'G066', 'G078', 'G082', 'G086', 'G090', 'G094', 'G098')
+```
+
+```{r}
+#| label: data_model
+# Ajout de la colonne essai pour les cuves en essai
+dmodel <- dcp |> left_join(dcuves_essai, join_by(cod_cuve)) |> 
+  filter(!(cod_cuve ))
+  mutate(period_essai = if_else(dat >= ymd(dat_deb_essai_plot), 1, 0)) |> 
+  tidyr::replace_na(list(period_essai = 0)) |> 
+   mutate(period_essai_col = factor(period_essai, levels = c(0, 1), labels = c("avant", "après"))) |> 
+  mutate(groupe = if_else(cod_cuve %in% cuves_essai, 1, 0)) |> 
+  mutate(groupe_col =  factor(groupe, levels = c(1, 0), labels = c("essai", "ref"))) |> 
+  mutate(essai = groupe * period_essai) |> 
+  rowwise() |> 
+  mutate(tps_dpa_moy = mean(c(piq1, piq2, piq3, piq4), na.rm = T)) |> 
+  select(-starts_with("piq")) |> 
+  mutate(cuve_essai = paste0(groupe_col, "_", period_essai_col)) |>
+  group_by(cuve_essai) |> 
+  mutate(ntea_per = mean(ntea, na.rm = T),
+         sea_per = mean(sea, na.rm = T),
+         tps_dpa_per = mean(tps_dpa_moy, na.rm = T),
+         nb_dpa_per  = mean(nbpiq, na.rm = T),
+         hbd_per    = mean(hbd, na.rm = T)
+         ) 
+```
+
+## Contexte et Objectif
+
+> Nous avons lancé un essai de réduction de la sollicitation des DPA le
+> **12/6/2025 M** en ajustant les paramètres de fonctionnement :
+>
+> -   Cuves d'essai : **68 cuves** à cycle anodique de 76 postes
+> -   **HBC passe de 18 à 19cm** sur les cuves d'essai et de 17 à 18cm
+>     sur les cuves de référence
+> -   **TPI à 1.4s** (temps d'activation des DPA quand le contact
+>     pointerolle ne fonctionne pas)
+> -   **TPIMO à 0.7s** (temps minimum d'activation des DPA)
+> -   **NOCOPI à 1333** ( modification du 12/6 annulée par une loi de
+>     démarrage le 12/6 et corrigée le 16/6 M)
+
+```{r}
+#| label: nb_cuves_groupes
+#| include: true
+# Nombre de cuves d'essai et de référence
+d_cuves |> 
+  group_by(groupe) |> 
+  count()
+```
+
+## Indicateurs procédé à évaluer
+
+-   Taux d'effet d'anode
+
+-   Surtension d'effet d'anode
+
+-   Nombre de coups de piqueur
+
+-   Temps d'activation des piqueurs
+
+-   Hauteur de bain
+
+## Graphiques
+
+```{r}
+#| label: plot_ntea
+#| include: true
+dmodel |> 
+  group_by(groupe_col, jour = floor_date(dat, "4d")) |> 
+  summarise(ntea_jour = mean(ntea, na.rm = T)) |> 
+  ggplot(aes(x = jour, y = ntea_jour, colour = groupe_col)) +
+  geom_line(linewidth = 1.0) +
+  geom_vline(xintercept = as_date(ymd(dat_deb_essai_plot))) +
+  geom_step(data = dmodel, aes(x = dat, y = ntea_per, color = groupe_col)) +
+  customColors::scale_color_potline(name = "", reverse = F) +
+  expand_limits(y = 0) +
+  labs(title = "Taux d'effet d'anode moyen 4 jours ", y = "", x = "")
+  
+```
+
+```{r}
+#| label: plot_sea
+#| include: true
+dmodel |> 
+  group_by(groupe, jour = floor_date(dat, "4d")) |> 
+  summarise(sea_jour= mean(sea, na.rm = T)) |> 
+  ggplot(aes(x = jour, y = sea_jour, colour = factor(groupe, lev = c(0, 1), lab = c("ref", "essai")))) +
+  geom_line(linewidth = 1.1) +
+   geom_step(data = dmodel, aes(x = dat, y = sea_per, color = groupe_col)) +
+  geom_vline(xintercept = as_date(ymd(dat_deb_essai_plot))) +
+  customColors::scale_color_potline(name = "", reverse = T) +
+  labs(title = "Surtension d'effet d'anode moyen 4 jours", x = "", y = "mV")
+  
+```
+
+```{r}
+#| label: plot_tps_dpa
+#| include: true
+dmodel |> 
+  group_by(groupe, jour = floor_date(dat, "4d")) |> 
+  summarise(tps_dpa_jour= mean(tps_dpa_moy, na.rm = T)) |> 
+  ggplot(aes(x = jour, y = tps_dpa_jour, colour = factor(groupe, lev = c(0, 1), lab = c("ref", "essai")))) +
+  geom_line(linewidth = 1.1) +
+  scale_y_continuous(breaks = seq(1.3, 1.7, .1)) +
+   geom_step(data = dmodel, aes(x = dat, y = tps_dpa_per, color = groupe_col)) +
+  geom_vline(xintercept = as_date(ymd(dat_deb_essai_plot))) +
+  customColors::scale_color_potline(name = "", rev = T) +
+  labs(title = "Temps DPA moyen 4 jours", x = "", y = "s")
+  
+```
+
+```{r}
+#| label: plot_nb_dpa
+#| include: true
+dmodel |> 
+  group_by(groupe, jour = floor_date(dat, "1d")) |> 
+  summarise(nb_dpa_jour= mean(nbpiq, na.rm = T)) |> 
+  ggplot(aes(x = jour, y = nb_dpa_jour, colour = factor(groupe, lev = c(0, 1), lab = c("ref", "essai")))) +
+  geom_line(linewidth = 1.1) +
+   geom_step(data = dmodel, aes(x = dat, y = nb_dpa_per, color = groupe_col)) +
+  geom_vline(xintercept = as_date(ymd(dat_deb_essai_plot))) +
+  customColors::scale_color_potline(name = "", rev = T) +
+  labs(title = "Nb piquage DPA moyen jour", x = "", y = "#")
+  
+```
+
+```{r}
+#| label: plot_hbd
+#| include: true
+dmodel |> 
+  group_by(groupe, jour = floor_date(dat, "4d")) |> 
+  summarise(hbd_jour= mean(hbd, na.rm = T)) |> 
+  ggplot(aes(x = jour, y = hbd_jour, colour = factor(groupe, lev = c(0, 1), lab = c("ref", "essai")))) +
+  geom_line(linewidth = 1.1) +
+   geom_step(data = dmodel, aes(x = dat, y = hbd_per, color = groupe_col)) +
+  geom_vline(xintercept = as_date(ymd(dat_deb_essai_plot))) +
+  customColors::scale_color_potline(name = "", rev = T) +
+  labs(title = "Hauteur de Bain moyenne 4 jours", x = "", y = "cm")
+  
+```
+
+## Evaluation des effets de l'essai
+
+### Taux d'effet d'anode
+
+```{r}
+#| label: effet_ntea
+#| include: true
+# modele lmer
+mod_lmer_ntea <- lme4::lmer(formula = "ntea ~ essai + (1 | cod_cuve) + (1|dat)", data = dmodel)
+sjPlot::tab_model(mod_lmer_ntea, title = "Modèle lmer ntea", digits = 4)
+```
+
+### SEA
+
+```{r}
+#| label: effet_sea
+#| include: true
+# modele lmer
+mod_lmer_sea <- lme4::lmer(formula = "sea ~ essai + (1 | cod_cuve) + (1 | dat) ", data = dmodel)
+sjPlot::tab_model(mod_lmer_sea, title = "Modèle lmer sea", digits = 1)
+```
+
+### Temps DPA
+
+```{r}
+#| label: effet_tps_dpa
+#| include: true
+mod_lmer_tps_dpa <- lme4::lmer(formula = "tps_dpa_moy ~ essai + (1 | cod_cuve) + (1|dat)", data = dmodel)
+sjPlot::tab_model(mod_lmer_tps_dpa, title = "Modèle lmer temps dpa", digits = 3)
+```
+
+### Nb Coups de piqueur
+
+```{r}
+#| label: effet_nb_piq
+#| include: true
+mod_lmer_nbpiq <- lme4::lmer(formula = "nbpiq ~ essai + (1 | cod_cuve) + (1|dat)", data = dmodel)
+sjPlot::tab_model(mod_lmer_nbpiq, title = "Modèle lmer Nombre coups piqueur", digits = 3)
+```
+
+### Hauteur de Bain
+
+```{r}
+#| label: effet_hbd
+#| include: true
+mod_lmer_hbd <- lme4::lmer(formula = "hbd ~ essai + (1 | cod_cuve) + (1|dat)", data = dmodel)
+sjPlot::tab_model(mod_lmer_hbd, title = "Modèle lmer Nombre coups piqueur", digits = 3)
+```
