@@ -61,7 +61,7 @@ dmodel <- dcp |> left_join(dcuves_essai, join_by(cod_cuve)) |>
   tidyr::replace_na(list(period_essai = 0)) |> 
    mutate(period_essai_col = factor(period_essai, levels = c(0, 1), labels = c("avant", "après"))) |> 
   mutate(groupe = if_else(cod_cuve %in% cuves_essai, 1, 0)) |> 
-  mutate(groupe_col =  factor(groupe, levels = c(1, 0), labels = c("essai", "ref"))) |> 
+  mutate(groupe_col =  factor(groupe, levels = c(0, 1), labels = c("ref", "essai"))) |> 
   mutate(essai = groupe * period_essai) |> 
   rowwise() |> 
   mutate(tps_dpa_moy = mean(c(piq1, piq2, piq3, piq4), na.rm = T)) |> 
@@ -81,17 +81,17 @@ dmodel <-  dmodel |>
 
 ## Contexte et Objectif
 
-> Nous avons lancé un essai de réduction de la sollicitation des DPA le
-> **12/6/2025 M** en ajustant les paramètres de fonctionnement :
+> Nous avons lancé un essai de réduction de la sollicitation des DPA le **12/6/2025 M** en
+> ajustant les paramètres de fonctionnement :
 >
 > -   Cuves d'essai : **68 cuves** à cycle anodique de 76 postes
-> -   **HBC passe de 18 à 19cm** sur les cuves d'essai et de 17 à 18cm
->     sur les cuves de référence
-> -   **TPI à 1.4s** (temps d'activation des DPA quand le contact
->     pointerolle ne fonctionne pas)
+> -   **HBC passe de 18 à 19cm** sur les cuves d'essai et de 17 à 18cm sur les cuves de
+>     référence
+> -   **TPI à 1.4s** (temps d'activation des DPA quand le contact pointerolle ne
+>     fonctionne pas)
 > -   **TPIMO à 0.7s** (temps minimum d'activation des DPA)
-> -   **NOCOPI à 1333** ( modification du 12/6 annulée par une loi de
->     démarrage le 12/6 et corrigée le **16/6 M**)
+> -   **NOCOPI à 1333** ( modification du 12/6 annulée par une loi de démarrage le 12/6 et
+>     corrigée le **16/6 M**)
 
 ```{r}
 #| label: nb_cuves_groupes
@@ -99,7 +99,9 @@ dmodel <-  dmodel |>
 # Nombre de cuves d'essai et de référence
 d_cuves |> 
   group_by(groupe) |> 
-  count()
+  count() |> 
+  ungroup() |> 
+  gt::gt()
 ```
 
 ## Indicateurs procédé à évaluer
@@ -201,8 +203,15 @@ dmodel |>
 #| label: effet_ntea
 #| include: true
 # modele lmer
-mod_lmer_ntea <- lme4::lmer(formula = "ntea ~ essai + (1 | cod_cuve) + (1|dat)", data = dmodel)
+mod_lmer_ntea <- lme4::glmer(formula = "ntea ~ groupe_col*period_essai_col + (1 | cod_cuve) + (1|dat)", data = dmodel, family = poisson(link = "log"))
 sjPlot::tab_model(mod_lmer_ntea, title = "Modèle lmer ntea", digits = 4)
+# Table des résultats du modèle
+res_mod_poisson_ntea = divUtils::extract_ci_inter_model(mod_lmer_ntea, pattern = ".", log_resp = T) 
+# res_mod_poisson_ntea$term = c("Taux EA base", "taux essai")
+
+res_mod_poisson_ntea|> 
+  gt::gt(cap = "Evaluation de l'effet de l'essai sur le taux d'EA") |> 
+  gt::fmt_number(decimals = 2)  
 ```
 
 ### SEA
@@ -210,6 +219,7 @@ sjPlot::tab_model(mod_lmer_ntea, title = "Modèle lmer ntea", digits = 4)
 ```{r}
 #| label: effet_sea
 #| include: true
+#| eval: false
 # modele lmer
 mod_lmer_sea <- lme4::lmer(formula = "sea ~ essai + (1 | cod_cuve) + (1 | dat) ", data = dmodel)
 sjPlot::tab_model(mod_lmer_sea, title = "Modèle lmer sea", digits = 1)
@@ -220,7 +230,7 @@ sjPlot::tab_model(mod_lmer_sea, title = "Modèle lmer sea", digits = 1)
 ```{r}
 #| label: effet_tps_dpa
 #| include: true
-mod_lmer_tps_dpa <- lme4::lmer(formula = "tps_dpa_moy ~ essai + (1 | cod_cuve) + (1|dat)", data = dmodel)
+mod_lmer_tps_dpa <- lme4::lmer(formula = "tps_dpa_moy ~ groupe_col*period_essai_col + (1 | cod_cuve) + (1|dat)", data = dmodel)
 sjPlot::tab_model(mod_lmer_tps_dpa, title = "Modèle lmer temps dpa", digits = 3)
 ```
 
@@ -229,7 +239,7 @@ sjPlot::tab_model(mod_lmer_tps_dpa, title = "Modèle lmer temps dpa", digits = 3
 ```{r}
 #| label: effet_nb_piq
 #| include: true
-mod_lmer_nbpiq <- lme4::lmer(formula = "nbpiq ~ essai + (1 | cod_cuve) + (1|dat)", data = dmodel)
+mod_lmer_nbpiq <- lme4::lmer(formula = "nbpiq ~ groupe_col*period_essai_col + (1 | cod_cuve) + (1|dat)", data = dmodel)
 sjPlot::tab_model(mod_lmer_nbpiq, title = "Modèle lmer Nombre coups piqueur", digits = 3)
 ```
 
@@ -238,6 +248,6 @@ sjPlot::tab_model(mod_lmer_nbpiq, title = "Modèle lmer Nombre coups piqueur", d
 ```{r}
 #| label: effet_hbd
 #| include: true
-mod_lmer_hbd <- lme4::lmer(formula = "hbd ~ essai + (1 | cod_cuve) + (1|dat)", data = dmodel)
-sjPlot::tab_model(mod_lmer_hbd, title = "Modèle lmer Nombre coups piqueur", digits = 3)
+mod_lmer_hbd <- lme4::lmer(formula = "hbd ~ groupe_col*period_essai_col + (1 | cod_cuve) + (1|dat)", data = dmodel)
+sjPlot::tab_model(mod_lmer_hbd, title = "Modèle lmer Hauteur de Bain", digits = 3)
 ```
