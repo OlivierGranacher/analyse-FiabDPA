@@ -1,5 +1,5 @@
 ---
-title: "Analyse des factures mensuelles DPA de Mille"
+title: "Analyse des factures mensuelles DPA de Mille 2"
 author: "OG"
 format: 
   html:
@@ -33,6 +33,9 @@ theme_set(customColors::theme_potline())
 # palette name pour plots - MetBrewer Package
 pal_name <- "Austria"
 file_path <- "data/factures_dpa_Mille.xlsx"
+# Nombre de mois max des données
+n_mois_max <- 15
+
 ```
 
 ```{r}
@@ -48,6 +51,7 @@ d_raw <- readxl::read_xlsx(
 ### période des données
 dat_min <- min(d_raw$mois) |> format("%d-%m-%Y")
 dat_max <- max(d_raw$mois) |> format("%d-%m-%Y")
+
 # Import des catégories d'interventions
 cat <- readxl::read_xlsx(
   path = file_path,
@@ -73,6 +77,13 @@ ddd <- d_raw |>
     cout_mois,
     join_by(mois)
             )
+mois_max <- max(d_raw$mois) |> format("%B %Y")
+# mois max en Posixct
+mois_max_ <- max(d_raw$mois) |> as.POSIXct() 
+# Limitation du nombre de mois
+ddd = ddd |> 
+  filter(mois >= (mois_max_ - months(n_mois_max)))
+mois_min <- min(d_raw$mois) |> format("%B %Y")            
 # n_mois nombre de mois analysés
 n_mois <- nrow(cout_mois)
 # Cout total de tous les mois
@@ -83,8 +94,7 @@ cout_annualise <- (cout_total * 12 / n_mois) |> round(-3)
 cout_moyen_mois <- (cout_total / n_mois) |> round(-2)
 # date range
 ### période des données
-mois_min <- min(d_raw$mois) |> format("%B %Y")
-mois_max <- max(d_raw$mois) |> format("%B %Y")
+
 date_range_title <- glue("{n_mois} mois de {mois_min} à {mois_max}")
 # Subtitle 
 sub <- "% de la facture totale"
@@ -179,8 +189,8 @@ plot_pareto_cout <- function(d = ddd, .cat = "verin_piqueur", pal = pal_cat) {
 
 ## Objectif
 
-> Visualiser la décomposition des coûts de réparation des DPA sur la
-> base des factures mensuelles de Mille
+> Visualiser la décomposition des coûts de réparation des DPA sur la base des factures
+> mensuelles de Mille
 
 ## Nombre de DPA réparés
 
@@ -385,14 +395,20 @@ ddd |>
     
 ```
 
-## Coûts par composant
+## Paretos Coûts par composant sur les 3 derniers mois
 
 ```{r}
 #| label: pareto_cout_cat
 #| include: true
+# cout total des 3 derniers mois
+cout_total_3mois = ddd |> 
+  filter(mois >= mois_max_ - months(3)) |> 
+  summarise(cout_total = sum(cout, na.rm = T)) |> 
+  pull(cout_total)
 ddd |> 
+  filter(mois >= mois_max_ - months(3)) |>
   group_by(categorie) |> 
-  summarise(cout_cat = sum(cout, na.rm = T)/cout_total) |> 
+  summarise(cout_cat = sum(cout, na.rm = T)/cout_total_3mois) |> 
   ggplot(aes(x = cout_cat, 
              y = forcats::fct_reorder(
                categorie,
@@ -412,7 +428,7 @@ ddd |>
   scale_fill_manual(values = pal_cat ) +
   scale_x_continuous(labels = scales::label_percent()) +
   labs(x = "",
-       title = "Coûts DPA par composant",
+       title = "Coûts DPA par composant \nsur les 3 derniers mois",
        subtitle = sub,
        caption = date_range_title,
        y = "") +
