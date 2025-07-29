@@ -59,14 +59,14 @@ cuves_essai_init <- c('G061', 'G065', 'G069', 'G073', 'G077', 'G081', 'G085', 'G
 dmodel <- dcp |> left_join(dcuves_essai, join_by(cod_cuve)) |> 
   mutate(period_essai = if_else(dat >= ymd(dat_deb_essai_plot), 1, 0)) |> 
   tidyr::replace_na(list(period_essai = 0)) |> 
-   mutate(period_essai_col = factor(period_essai, levels = c(0, 1), labels = c("avant", "après"))) |> 
+   mutate(period_essai_ = factor(period_essai, levels = c(0, 1), labels = c("avant", "après"))) |> 
   mutate(groupe = if_else(cod_cuve %in% cuves_essai, 1, 0)) |> 
-  mutate(groupe_col =  factor(groupe, levels = c(0, 1), labels = c("ref", "essai"))) |> 
+  mutate(groupe_ =  factor(groupe, levels = c(0, 1), labels = c("ref", "essai"))) |> 
   mutate(essai = groupe * period_essai) |> 
   rowwise() |> 
   mutate(tps_dpa_moy = mean(c(piq1, piq2, piq3, piq4), na.rm = T)) |> 
   select(-starts_with("piq")) |> 
-  mutate(cuve_essai = paste0(groupe_col, "_", period_essai_col)) |>
+  mutate(cuve_essai = paste0(groupe_, "_", period_essai_)) |>
   group_by(cuve_essai) |> 
   mutate(ntea_per = mean(ntea, na.rm = T),
          sea_per = mean(sea, na.rm = T),
@@ -122,13 +122,13 @@ d_cuves |>
 #| label: plot_ntea
 #| include: true
 dmodel |> 
-  group_by(groupe_col, jour = floor_date(dat, "d")) |> 
+  group_by(groupe_, jour = floor_date(dat, "d")) |> 
   summarise(ntea_jour = mean(ntea, na.rm = T)) |> 
-  ggplot(aes(x = jour, y = ntea_jour, colour = groupe_col)) +
+  ggplot(aes(x = jour, y = ntea_jour, colour = groupe_)) +
   geom_line(linewidth = 1.0) +
   geom_vline(xintercept = as_date(ymd(dat_deb_essai_plot))) +
-  geom_step(data = dmodel, aes(x = dat, y = ntea_per, color = groupe_col)) +
-  customColors::scale_color_potline(name = "", reverse = F) +
+  geom_step(data = dmodel, aes(x = dat, y = ntea_per, color = groupe_)) +
+  customColors::scale_color_potline(name = "", reverse = T) +
   expand_limits(y = 0) +
   labs(title = "Taux d'effet d'anode moyen jour ", y = "", x = "")
   
@@ -142,7 +142,7 @@ dmodel |>
   summarise(sea_jour= mean(sea, na.rm = T)) |> 
   ggplot(aes(x = jour, y = sea_jour, colour = factor(groupe, lev = c(0, 1), lab = c("ref", "essai")))) +
   geom_line(linewidth = 1.1) +
-   geom_step(data = dmodel, aes(x = dat, y = sea_per, color = groupe_col)) +
+   geom_step(data = dmodel, aes(x = dat, y = sea_per, color = groupe_)) +
   geom_vline(xintercept = as_date(ymd(dat_deb_essai_plot))) +
   customColors::scale_color_potline(name = "", reverse = T) +
   labs(title = "Surtension d'effet d'anode moyen jour", x = "", y = "mV")
@@ -158,7 +158,7 @@ dmodel |>
   ggplot(aes(x = jour, y = tps_dpa_jour, colour = factor(groupe, lev = c(0, 1), lab = c("ref", "essai")))) +
   geom_line(linewidth = 1.1) +
   scale_y_continuous(breaks = seq(1.2, 1.7, .1)) +
-   geom_step(data = dmodel, aes(x = dat, y = tps_dpa_per, color = groupe_col)) +
+   geom_step(data = dmodel, aes(x = dat, y = tps_dpa_per, color = groupe_)) +
   geom_vline(xintercept = as_date(ymd(dat_deb_essai_plot))) +
   customColors::scale_color_potline(name = "", rev = T) +
   labs(title = "Temps DPA moyen ", x = "", y = "s")
@@ -173,7 +173,7 @@ dmodel |>
   summarise(nb_dpa_jour= mean(nbpiq, na.rm = T)) |> 
   ggplot(aes(x = jour, y = nb_dpa_jour, colour = factor(groupe, lev = c(0, 1), lab = c("ref", "essai")))) +
   geom_line(linewidth = 1.1) +
-   geom_step(data = dmodel, aes(x = dat, y = nb_dpa_per, color = groupe_col)) +
+   geom_step(data = dmodel, aes(x = dat, y = nb_dpa_per, color = groupe_)) +
   geom_vline(xintercept = as_date(ymd(dat_deb_essai_plot))) +
   customColors::scale_color_potline(name = "", rev = T) +
   labs(title = "Nb piquage DPA moyen par poste", x = "", y = "#")
@@ -188,7 +188,7 @@ dmodel |>
   summarise(hbd_jour= mean(hbd, na.rm = T)) |> 
   ggplot(aes(x = jour, y = hbd_jour, colour = factor(groupe, lev = c(0, 1), lab = c("ref", "essai")))) +
   geom_line(linewidth = 1.1) +
-   geom_step(data = dmodel, aes(x = dat, y = hbd_per, color = groupe_col)) +
+   geom_step(data = dmodel, aes(x = dat, y = hbd_per, color = groupe_)) +
   geom_vline(xintercept = as_date(ymd(dat_deb_essai_plot))) +
   customColors::scale_color_potline(name = "", rev = T) +
   labs(title = "Hauteur de Bain moyenne 4 jours", x = "", y = "cm")
@@ -203,7 +203,7 @@ dmodel |>
 #| label: effet_ntea
 #| include: true
 # modele lmer
-mod_lmer_ntea <- lme4::glmer(formula = "ntea ~ groupe_col*period_essai_col + (1 | cod_cuve) + (1|dat)", data = dmodel, family = poisson(link = "log"))
+mod_lmer_ntea <- lme4::glmer(formula = "ntea ~ groupe_*period_essai_ + (1 | cod_cuve) + (1|dat)", data = dmodel, family = poisson(link = "log"))
 sjPlot::tab_model(mod_lmer_ntea, title = "Modèle lmer ntea", digits = 4)
 # Table des résultats du modèle
 res_mod_poisson_ntea = divUtils::extract_ci_inter_model(mod_lmer_ntea, pattern = ".", log_resp = T) 
@@ -211,7 +211,7 @@ res_mod_poisson_ntea = divUtils::extract_ci_inter_model(mod_lmer_ntea, pattern =
 
 res_mod_poisson_ntea|> 
   gt::gt(cap = "Evaluation de l'effet de l'essai sur le taux d'EA") |> 
-  gt::fmt_number(decimals = 2)  
+  gt::fmt_number(decimals = 3)  
 ```
 
 ### SEA
@@ -230,7 +230,7 @@ sjPlot::tab_model(mod_lmer_sea, title = "Modèle lmer sea", digits = 1)
 ```{r}
 #| label: effet_tps_dpa
 #| include: true
-mod_lmer_tps_dpa <- lme4::lmer(formula = "tps_dpa_moy ~ groupe_col*period_essai_col + (1 | cod_cuve) + (1|dat)", data = dmodel)
+mod_lmer_tps_dpa <- lme4::lmer(formula = "tps_dpa_moy ~ groupe_*period_essai_ + (1 | cod_cuve) + (1|dat)", data = dmodel)
 sjPlot::tab_model(mod_lmer_tps_dpa, title = "Modèle lmer temps dpa", digits = 3)
 ```
 
@@ -239,7 +239,7 @@ sjPlot::tab_model(mod_lmer_tps_dpa, title = "Modèle lmer temps dpa", digits = 3
 ```{r}
 #| label: effet_nb_piq
 #| include: true
-mod_lmer_nbpiq <- lme4::lmer(formula = "nbpiq ~ groupe_col*period_essai_col + (1 | cod_cuve) + (1|dat)", data = dmodel)
+mod_lmer_nbpiq <- lme4::lmer(formula = "nbpiq ~ groupe_*period_essai_ + (1 | cod_cuve) + (1|dat)", data = dmodel)
 sjPlot::tab_model(mod_lmer_nbpiq, title = "Modèle lmer Nombre coups piqueur", digits = 3)
 ```
 
@@ -248,6 +248,6 @@ sjPlot::tab_model(mod_lmer_nbpiq, title = "Modèle lmer Nombre coups piqueur", d
 ```{r}
 #| label: effet_hbd
 #| include: true
-mod_lmer_hbd <- lme4::lmer(formula = "hbd ~ groupe_col*period_essai_col + (1 | cod_cuve) + (1|dat)", data = dmodel)
+mod_lmer_hbd <- lme4::lmer(formula = "hbd ~ groupe_*period_essai_ + (1 | cod_cuve) + (1|dat)", data = dmodel)
 sjPlot::tab_model(mod_lmer_hbd, title = "Modèle lmer Hauteur de Bain", digits = 3)
 ```
