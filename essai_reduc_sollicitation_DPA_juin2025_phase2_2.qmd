@@ -217,12 +217,42 @@ res_mod_poisson_ntea|>
 ### SEA
 
 ```{r}
+#| label: data_sea
+#| include: true
+#| eval: false
+# Histogramme de SEA
+
+dmodel |> 
+  ggplot(aes(x = sea, fill= groupe_)) +
+  geom_histogram(bins = 100, position = "identity", alpha = 0.5, color = "black") +
+  customColors::scale_fill_potline(name = "", reverse = T) +
+  scale_x_log10() +
+  facet_wrap(~ groupe_, scales = "free_y", ncol = 1) +
+  labs(title = "Distribution de la Surtension d'Effet d'Anode", x = "SEA (mV)", y = "Nombre de valeurs") +
+  theme(legend.position = "bottom")
+# export des valeurs de SEA au format csv
+write.csv(dmodel |> select(cod_cuve, dat, period_essai, groupe, sea), "data/sea_essai_soll_DPA.csv", row.names = F)
+```
+
+```{r}
 #| label: effet_sea
 #| include: true
 #| eval: false
-# modele lmer
-mod_lmer_sea <- lme4::lmer(formula = "sea ~ essai + (1 | cod_cuve) + (1 | dat) ", data = dmodel)
-sjPlot::tab_model(mod_lmer_sea, title = "Modèle lmer sea", digits = 1)
+# modele 
+# Install required package if not already installed
+library(glmmTMB)
+
+# Fit a hurdle model with interaction and random effect for cod_cuve and dat
+model_sea <- glmmTMB(
+  sea ~ groupe_ * period_essai_ + (1 | cod_cuve) + (1 | dat),
+  ziformula = ~ groupe_ * period_essai_,
+  family = truncated_nbinom2(),  # or truncated_nbinom2() if overdispersed
+  data = dmodel
+)
+
+# Summary of the model
+#summary(model_sea)
+sjPlot::tab_model(model_sea, title = "Modèle lmer sea", digits = 1)
 ```
 
 ### Temps DPA
