@@ -79,6 +79,13 @@ dmodel <-  dmodel |>
   filter(!(cod_cuve %in% cuves_essai_init & dat < ymd(dat_deb_essai_plot)) )
 ```
 
+```{r}
+#| label: export_data_model
+#| eval: false
+# Export de dmodel
+dmodel |> 
+  readr::write_rds(file = "data/data_soll_dpa.rds")
+```
 ## Contexte et Objectif
 
 > Nous avons lancé un essai de réduction de la sollicitation des DPA le **12/6/2025 M** en
@@ -86,7 +93,7 @@ dmodel <-  dmodel |>
 >
 > -   Cuves d'essai : **68 cuves** à cycle anodique de 76 postes
 > -   **HBC passe de 18 à 19cm** sur les cuves d'essai et de 17 à 18cm sur les cuves de
->     référence
+>     référence (temporaire)
 > -   **TPI à 1.4s** (temps d'activation des DPA quand le contact pointerolle ne
 >     fonctionne pas)
 > -   **TPIMO à 0.7s** (temps minimum d'activation des DPA)
@@ -243,16 +250,17 @@ write.csv(dmodel |> select(cod_cuve, dat, period_essai, groupe, sea), "data/sea_
 library(glmmTMB)
 
 # Fit a hurdle model with interaction and random effect for cod_cuve and dat
-model_sea <- glmmTMB(
+
+model_tweedie_sea <- glmmTMB(
   sea ~ groupe_ * period_essai_ + (1 | cod_cuve) + (1 | dat),
-  ziformula = ~ groupe_ * period_essai_,
-  family = truncated_nbinom2(),  # or truncated_nbinom2() if overdispersed
+  family = tweedie(link = "log"),
   data = dmodel
 )
 
 # Summary of the model
 #summary(model_sea)
-sjPlot::tab_model(model_sea, title = "Modèle lmer sea", digits = 1)
+sjPlot::tab_model(model_tweedie_sea, title = "Modèle lmer sea", digits = 1)
+
 ```
 
 ### Temps DPA

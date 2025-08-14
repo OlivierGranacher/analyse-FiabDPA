@@ -1,0 +1,63 @@
+---
+title: "Test de la distrubution Tweedie sur les données SEA du test de sollicitation DPA de Juin 2025"
+author: "OG"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+date: last-modified
+lang: fr
+code-fold: true
+number-sections: true
+editor: visual
+fig-width: 8
+fig-asp: .62
+fig-align: left
+execute:
+  eval: true
+  cache: false
+  warning: false
+  echo: false
+  include: false
+theme: flatly
+---
+
+```{r}
+#| label: setup
+#| cache: true
+#| message: false
+#| warning: false
+library(dplyr)
+library(glue)
+library(lubridate)
+```
+
+```{r}
+#| label: data
+
+```
+
+## Objectif
+
+> Tester la distribution Tweedie pour l'inférence sur les données SEA : vérification de
+> l'effet réel, fit du modèle et évaluation de l'incertitude sur les effets
+
+## Référence
+
+### Distribution Tweedie
+
+-   <https://cran.r-project.org/web/packages/GlmSimulatoR/vignettes/tweedie_distribution.html>
+
+-   <https://en.wikipedia.org/wiki/Tweedie_distribution>
+
+## Visualisation des données
+
+> Données de l'essai de sollicitation des DPA sur 2 groupes : Nocopi = 1333 et Nocopi =
+> 1222 depuis le 16 juin 2025.
+>
+> Voir [essai_reduc_sollicitation_DPA_juin2025_phase2_2.qmd](essai_reduc_sollicitation_DPA_juin2025_phase2_2.qmd)
+
+```{r}
+#| label: load_data
+d = readr::read_rds("data/data_soll_dpa.rds")
+```
