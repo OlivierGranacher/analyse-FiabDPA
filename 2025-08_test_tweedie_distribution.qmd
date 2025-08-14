@@ -30,6 +30,7 @@ theme: flatly
 library(dplyr)
 library(glue)
 library(lubridate)
+library(ggplot2)
 ```
 
 ```{r}
@@ -60,4 +61,41 @@ library(lubridate)
 ```{r}
 #| label: load_data
 d = readr::read_rds("data/data_soll_dpa.rds")
+```
+
+```{r}
+#| label: plot_distrib_sea
+#| include: true
+hist_sea = d |> 
+ ggplot(aes(sea)) +
+  geom_histogram( color = "grey", fill = "blue", alpha = .5) +
+  scale_y_log10() +
+  labs(
+    title = "Distribution des montants SEA",
+    subtitle = "Échelle logarithmique en ordonnée",
+    x = "SEA en mV",
+    y = "Nombre d'observations (log10)"
+  )
+hist_sea
+```
+
+### Tweedie distribution fit
+
+```{r}
+#| label: find_tweedie_fit
+#| include: true
+#| echo: true
+## cplm
+library(cplm)
+glm_model = cpglm(sea~1, data = d, link = "log") 
+summary(glm_model)
+mean(d$sea)
+```
+
+
+```{r}
+#| label: fit_distr
+#| include: true
+hist_sea + 
+  geom_function(fun = ~nrow(d) * tweedie::dtweedie(., xi = NULL, mu = 1.31, phi = 1.71, power = 101) )
 ```
