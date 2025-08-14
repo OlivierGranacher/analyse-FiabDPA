@@ -7,3 +7,5 @@ figs
 *.xlsx
 data/
 .vscode
+analyse*/
+essai*/
